@@ -130,3 +130,30 @@ func readPart(part *multipart.Part, rename string) error {
 
 	return nil
 }
+
+
+// 支持读取多种类型的表单
+func ImportCnfConfig(c *gin.Context) {
+	datatype := c.PostForm("datatype")
+	if datatype == "" {
+		handleError(c, http.StatusBadRequest, "Parameter 'datatype' is required")
+		return
+	}
+	form, err := c.MultipartForm()
+	if err != nil {
+		handleError(c, http.StatusBadRequest, fmt.Sprintf("Failed to parse form: %s", err.Error()))
+		return
+	}
+
+	fmt.Printf("Form: %+v\n", form)
+	files := form.File["files"]
+	fmt.Printf("Files: %+v\n", files)
+	// skip the file if it is not obey the rule of filename
+	for _, fileHeader := range files {
+		if _, err := extractTimestamp(fileHeader.Filename); err != nil {
+			handleError(c, http.StatusBadRequest, fmt.Sprintf("Invalid filename: %s, error: %v", fileHeader.Filename, err))
+			return
+		}
+	}
+	...
+}
