@@ -97,3 +97,76 @@ func writePart(part io.Writer, fileName string) error {
 	}
 	return nil
 }
+
+
+// 支持多种类型，即key-value和files共同组成了request的body
+func writeFilesToRawMP(localDir string) error {
+
+	serverAddress := "http://localhost:8787"
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	err := writer.WriteField("datatype", "BG")
+	if err != nil {
+		fmt.Println("Error writing field:", err)
+		return err
+	}
+
+	zipFiles, err := file.IterateFilesInDir(localDir)
+	if err != nil {
+		return err
+	}
+
+	for _, f := range zipFiles {
+		fileName := filepath.Base(f)
+		if !strings.HasSuffix(fileName, ".zip") {
+			continue
+		}
+		part, err := writer.CreateFormFile("files", fileName)
+		if err != nil {
+			return err
+		}
+
+		file, _ := os.Open(filepath.Join(localDir, fileName))
+		_, err = io.Copy(part, file)
+		if err != nil {
+			fmt.Printf("Error copying file content: %v\n", err)
+			return err
+		}
+		fmt.Println("copy file done")
+		file.Close()
+	}
+
+	// if err := writer.Close(); err != nil {
+	// 	fmt.Printf("Error closing writer: %v\n", err)
+	// 	return err
+	// }
+
+	req, err := http.NewRequest("POST", fmt.Sprintf("%s/api/swm/v1/import-cnf-config", serverAddress), body)
+	if err != nil {
+		fmt.Printf("Error creating http request: %v\n", err)
+		return err
+	}
+
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	client := &http.Client{}
+	res, err := client.Do(req)
+	if err != nil {
+		fmt.Printf("Error sending http request: %v\n", err)
+		return err
+	}
+
+	// Check the response
+	if res.StatusCode != http.StatusOK {
+		fmt.Printf("Error: received status code %d\n", res.StatusCode)
+		// Print the response body
+		buf := new(bytes.Buffer)
+		buf.ReadFrom(res.Body)
+		fmt.Println(buf.String())
+		return err
+	}
+	fmt.Println("Files imported successfully")
+	return nil
+}
